@@ -1,13 +1,19 @@
 const { Client } = require('@notionhq/client');
 const fs = require('fs');
 
-// 環境変数からNotionの設定を取得
 const notion = new Client({ auth: process.env.NOTION_TOKEN });
 const databaseId = process.env.NOTION_DATABASE_ID;
 
 async function main() {
   try {
     console.log('Notionデータベースを確認しています...');
+    
+    // 💡 エラー原因特定のための自己診断テスト
+    if (!notion.databases || typeof notion.databases.query !== 'function') {
+      console.error('🚨 [致命的なエラー] Notion SDKが正しく読み込まれていません。');
+      console.error('🔍 【デバッグ情報】読み込まれた databases オブジェクト:', notion.databases);
+      throw new Error('Notion SDKのインストール状態が不正です。');
+    }
     
     // ステータスが「Claude生成待ち」のタスクを検索
     const response = await notion.databases.query({
@@ -18,7 +24,7 @@ async function main() {
           equals: 'Claude生成待ち'
         }
       },
-      page_size: 1 // 1回の実行で1つのタスクを処理
+      page_size: 1
     });
 
     if (response.results.length === 0) {
@@ -29,7 +35,7 @@ async function main() {
     const page = response.results[0];
     const pageId = page.id;
     
-    // タスクIDを取得（プロパティ名はNotionの設定に合わせて調整してください）
+    // タスクIDを取得
     let taskId = 'task-unknown';
     if (page.properties['タスクID']) {
       if (page.properties['タスクID'].title && page.properties['タスクID'].title.length > 0) {
@@ -41,7 +47,7 @@ async function main() {
 
     console.log(`✅ タスクが見つかりました: ${taskId} (Page ID: ${pageId})`);
 
-    // GitHub Actionsの環境変数(GITHUB_ENV)にタスクIDをエクスポート（ブランチ作成用）
+    // GitHub Actionsの環境変数にタスクIDをエクスポート
     if (process.env.GITHUB_ENV) {
       fs.appendFileSync(process.env.GITHUB_ENV, `TASK_ID=${taskId}\n`);
     }
