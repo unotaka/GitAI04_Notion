@@ -36,9 +36,8 @@ jobs:
       # 3. 必須自動化ツールのインストール
       - name: Install Automation Dependencies
         run: |
-          npm install @notionhq/client
+          npm install @notionhq/client@latest
           npm install -g @anthropic-ai/claude-code
-          echo "💡 開発言語や環境のセットアップは、Notionの記載内容に基づきClaude Codeが動的に処理します。"
 
       # 4. Notionに「Claude生成待ち」のタスクがないかポーリング（チェック）
       - name: Check Notion Database

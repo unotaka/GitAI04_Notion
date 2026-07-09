@@ -1,4 +1,3 @@
-// scripts/cron-scheduler.js
 const { Client } = require('@notionhq/client');
 const fs = require('fs');
 
