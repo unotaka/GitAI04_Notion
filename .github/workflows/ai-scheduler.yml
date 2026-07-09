@@ -4,9 +4,9 @@ on:
   #schedule:
   #  # 15分ごとに自動起動 (UTC基準。毎時 0, 15, 30, 45分に実行)
   #  - cron: '*/15 * * * *'
-  workflow_dispatch: # GitHub画面からいつでも手動で即座に実行できるボタンを設置[cite: 2]
+  workflow_dispatch: # GitHub画面からいつでも手動で即座に実行できるボタンを設置
 
-# ワークフローがリポジトリへの書き込みやPR作成を行えるよう権限を定義[cite: 2]
+# ワークフローがリポジトリへの書き込みやPR作成を行えるよう権限を定義
 permissions:
   contents: write
   pull-requests: write
@@ -14,7 +14,7 @@ permissions:
 
 jobs:
   ai-development-flow:
-    runs-on: ubuntu-latest[cite: 2]
+    runs-on: ubuntu-latest
 
     steps:
       # 1. コードのチェックアウト（明示的に対象リポジトリを指定し、mainをベースにする）
@@ -24,31 +24,31 @@ jobs:
           repository: unotaka/GitAI04_Notion
           ref: main # 💡 確実にmainブランチの最新状態を取得する
           token: ${{ secrets.GH_TOKEN || secrets.GITHUB_TOKEN }}
-          fetch-depth: 0 # すべての分岐履歴を取得[cite: 2]
+          fetch-depth: 0 # すべての分岐履歴を取得
 
       # 2. 自動化スクリプト実行用の Node.js 環境セットアップ
       # ※アプリケーション自体の開発言語・環境はNotionを参照してClaudeが動的に対応します
       - name: Setup Node.js for Automation Scripts
         uses: actions/setup-node@v4
         with:
-          node-version: 20[cite: 2]
+          node-version: 20
 
-      # 3. 必須自動化ツールのインストール[cite: 2]
+      # 3. 必須自動化ツールのインストール
       - name: Install Automation Dependencies
         run: |
           npm install @notionhq/client
           npm install -g @anthropic-ai/claude-code
-          echo "💡 開発言語や環境のセットアップは、Notionの記載内容に基づきClaude Codeが動的に処理します。"[cite: 2]
+          echo "💡 開発言語や環境のセットアップは、Notionの記載内容に基づきClaude Codeが動的に処理します。"
 
-      # 4. Notionに「Claude生成待ち」のタスクがないかポーリング（チェック）[cite: 2]
+      # 4. Notionに「Claude生成待ち」のタスクがないかポーリング（チェック）
       - name: Check Notion Database
         env:
           NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
           NOTION_DATABASE_ID: ${{ secrets.NOTION_DATABASE_ID }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-        run: node scripts/cron-scheduler.js[cite: 2]
+        run: node scripts/cron-scheduler.js
 
-      # 5. 【条件分岐】タスクがある場合のみ、かんばんの「タスクID」名でGitブランチを作成・切り替え[cite: 2]
+      # 5. 【条件分岐】タスクがある場合のみ、かんばんの「タスクID」名でGitブランチを作成・切り替え
       - name: Create Feature Branch
         if: env.TASK_ID != ''
         run: |
@@ -58,19 +58,19 @@ jobs:
           # 💡 origin/main をベースにして新規ブランチを作成する
           git checkout -B feature/${{ env.TASK_ID }} origin/main
 
-      # 6. 【条件分岐】Claude Codeによるソースコードの自動生成（Notionの環境情報を参照）[cite: 2]
+      # 6. 【条件分岐】Claude Codeによるソースコードの自動生成（Notionの環境情報を参照）
       - name: Run Claude Coder
         if: env.TASK_ID != ''
         env:
-          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}[cite: 2]
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
           NOTION_DATABASE_ID: ${{ secrets.NOTION_DATABASE_ID }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-          CLAUDE_CODE_NON_INTERACTIVE: "true"[cite: 2]
+          CLAUDE_CODE_NON_INTERACTIVE: "true"
         run: |
           # スクリプト内でNotionから「開発環境・言語情報」と「要件」を取得し、
-          # claudeコマンドにコンテキストとして渡して実行させます[cite: 2]
-          node scripts/claude-coder.js[cite: 2]
+          # claudeコマンドにコンテキストとして渡して実行させます
+          node scripts/claude-coder.js
 
       # 7. 成果物をブランチへコミットし、指定リポジトリへ強制プッシュ
       - name: Push Code
@@ -86,18 +86,18 @@ jobs:
           git remote set-url origin https://x-access-token:${GH_TOKEN}@github.com/unotaka/GitAI04_Notion.git
           
           git add .
-          git commit -m "🤖 自動生成: Notionタスク ${{ env.TASK_ID }} の実装コード"[cite: 2]
+          git commit -m "🤖 自動生成: Notionタスク ${{ env.TASK_ID }} の実装コード"
           
-          git push -u origin feature/${{ env.TASK_ID }} --force[cite: 2]
+          git push -u origin feature/${{ env.TASK_ID }} --force
 
-      # 8. 【条件分岐】すべての工程が完了したら、Notionのステータスを「Git格納済み」に更新[cite: 2]
+      # 8. 【条件分岐】すべての工程が完了したら、Notionのステータスを「Git格納済み」に更新
       - name: Update Notion Status to Git Stored
         if: env.TASK_ID != ''
         run: |
-          # JSONファイルから PAGE_ID をノードのワンライナーで安全に抽出[cite: 2]
-          PAGE_ID=$(node -e "console.log(require('./task_info.json').PAGE_ID)")[cite: 2]
+          # JSONファイルから PAGE_ID をノードのワンライナーで安全に抽出
+          PAGE_ID=$(node -e "console.log(require('./task_info.json').PAGE_ID)")
           
-          echo "📝 Notionのタスク（ページID: $PAGE_ID）を『Git格納済み』に更新中..."[cite: 2]
+          echo "📝 Notionのタスク（ページID: $PAGE_ID）を『Git格納済み』に更新中..."
           
           curl -X PATCH "https://api.notion.com/v1/pages/$PAGE_ID" \
             -H "Authorization: Bearer ${{ secrets.NOTION_TOKEN }}" \
@@ -111,6 +111,6 @@ jobs:
                   }
                 }
               }
-            }'[cite: 2]
+            }'
           
-          echo "🎉 すべての自動化プロセスが正常に完了しました！"[cite: 2]
+          echo "🎉 すべての自動化プロセスが正常に完了しました！"
