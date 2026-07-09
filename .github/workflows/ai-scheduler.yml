@@ -17,12 +17,13 @@ jobs:
     runs-on: ubuntu-latest[cite: 2]
 
     steps:
-      # 1. コードのチェックアウト（明示的に対象リポジトリを指定）
+      # 1. コードのチェックアウト（明示的に対象リポジトリを指定し、mainをベースにする）
       - name: Checkout Repository
         uses: actions/checkout@v4
         with:
-          repository: unotaka/GitAI04_Notion # 💡 格納先リポジトリを明示
-          token: ${{ secrets.GH_TOKEN || secrets.GITHUB_TOKEN }} # 外部リポジトリから実行する場合はPATが必要
+          repository: unotaka/GitAI04_Notion
+          ref: main # 💡 確実にmainブランチの最新状態を取得する
+          token: ${{ secrets.GH_TOKEN || secrets.GITHUB_TOKEN }}
           fetch-depth: 0 # すべての分岐履歴を取得[cite: 2]
 
       # 2. 自動化スクリプト実行用の Node.js 環境セットアップ
@@ -53,7 +54,9 @@ jobs:
         run: |
           git config --global user.name "Claude Developer Bot"
           git config --global user.email "claude-bot@yourdomain.local"
-          git checkout -B feature/${{ env.TASK_ID }}[cite: 2]
+          
+          # 💡 origin/main をベースにして新規ブランチを作成する
+          git checkout -B feature/${{ env.TASK_ID }} origin/main
 
       # 6. 【条件分岐】Claude Codeによるソースコードの自動生成（Notionの環境情報を参照）[cite: 2]
       - name: Run Claude Coder
