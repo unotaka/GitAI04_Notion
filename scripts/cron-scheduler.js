@@ -1,41 +1,50 @@
-const { Client } = require('@notionhq/client');
+// scripts/cron-scheduler.js
 const fs = require('fs');
 
-const notion = new Client({ auth: process.env.NOTION_TOKEN });
-const databaseId = process.env.NOTION_DATABASE_ID;
+// 環境変数からNotionの設定を取得
+const NOTION_TOKEN = process.env.NOTION_TOKEN;
+const DATABASE_ID = process.env.NOTION_DATABASE_ID;
+const NOTION_VERSION = '2022-06-28';
 
 async function main() {
   try {
-    console.log('Notionデータベースを確認しています...');
+    console.log('Notionデータベースを確認しています... (Native Fetch版)');
     
-    // 💡 エラー原因特定のための自己診断テスト
-    if (!notion.databases || typeof notion.databases.query !== 'function') {
-      console.error('🚨 [致命的なエラー] Notion SDKが正しく読み込まれていません。');
-      console.error('🔍 【デバッグ情報】読み込まれた databases オブジェクト:', notion.databases);
-      throw new Error('Notion SDKのインストール状態が不正です。');
-    }
-    
-    // ステータスが「Claude生成待ち」のタスクを検索
-    const response = await notion.databases.query({
-      database_id: databaseId,
-      filter: {
-        property: 'ステータス',
-        status: {
-          equals: 'Claude生成待ち'
-        }
+    // 💡 ライブラリを使わず、直接Notion APIへHTTPリクエストを送信
+    const response = await fetch(`https://api.notion.com/v1/databases/${DATABASE_ID}/query`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${NOTION_TOKEN}`,
+        'Notion-Version': NOTION_VERSION,
+        'Content-Type': 'application/json'
       },
-      page_size: 1
+      body: JSON.stringify({
+        filter: {
+          property: 'ステータス',
+          status: {
+            equals: 'Claude生成待ち'
+          }
+        },
+        page_size: 1 // 1回の実行で1つのタスクを処理
+      })
     });
 
-    if (response.results.length === 0) {
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`HTTP Error: ${response.status} \n${errorText}`);
+    }
+
+    const data = await response.json();
+
+    if (data.results.length === 0) {
       console.log('💡 現在「Claude生成待ち」のタスクはありません。');
       return;
     }
 
-    const page = response.results[0];
+    const page = data.results[0];
     const pageId = page.id;
     
-    // タスクIDを取得
+    // タスクIDを取得（プロパティ名はNotionの設定に合わせて調整してください）
     let taskId = 'task-unknown';
     if (page.properties['タスクID']) {
       if (page.properties['タスクID'].title && page.properties['タスクID'].title.length > 0) {
@@ -47,7 +56,7 @@ async function main() {
 
     console.log(`✅ タスクが見つかりました: ${taskId} (Page ID: ${pageId})`);
 
-    // GitHub Actionsの環境変数にタスクIDをエクスポート
+    // GitHub Actionsの環境変数(GITHUB_ENV)にタスクIDをエクスポート（ブランチ作成用）
     if (process.env.GITHUB_ENV) {
       fs.appendFileSync(process.env.GITHUB_ENV, `TASK_ID=${taskId}\n`);
     }
