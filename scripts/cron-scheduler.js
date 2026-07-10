@@ -10,7 +10,15 @@ async function main() {
   try {
     console.log('Notionデータベースを確認しています... (Native Fetch版)');
     
-    // 💡 ライブラリを使わず、直接Notion APIへHTTPリクエストを送信
+    // 💡 安全装置: DATABASE_ID の中身をチェック
+    if (!DATABASE_ID) {
+      throw new Error('NOTION_DATABASE_ID が空です。GitHub Secretsの設定を確認してください。');
+    }
+    if (DATABASE_ID.includes('http') || DATABASE_ID.includes('/')) {
+      throw new Error(`NOTION_DATABASE_ID の設定が間違っています。URLではなく32桁のIDのみを指定してください。 (現在の値: ${DATABASE_ID})`);
+    }
+
+    // ライブラリを使わず、直接Notion APIへHTTPリクエストを送信
     const response = await fetch(`https://api.notion.com/v1/databases/${DATABASE_ID}/query`, {
       method: 'POST',
       headers: {
@@ -44,7 +52,7 @@ async function main() {
     const page = data.results[0];
     const pageId = page.id;
     
-    // タスクIDを取得（プロパティ名はNotionの設定に合わせて調整してください）
+    // タスクIDを取得
     let taskId = 'task-unknown';
     if (page.properties['タスクID']) {
       if (page.properties['タスクID'].title && page.properties['タスクID'].title.length > 0) {
@@ -56,7 +64,7 @@ async function main() {
 
     console.log(`✅ タスクが見つかりました: ${taskId} (Page ID: ${pageId})`);
 
-    // GitHub Actionsの環境変数(GITHUB_ENV)にタスクIDをエクスポート（ブランチ作成用）
+    // GitHub Actionsの環境変数(GITHUB_ENV)にタスクIDをエクスポート
     if (process.env.GITHUB_ENV) {
       fs.appendFileSync(process.env.GITHUB_ENV, `TASK_ID=${taskId}\n`);
     }
