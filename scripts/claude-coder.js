@@ -1,18 +1,14 @@
 // scripts/claude-coder.js
-const { execFileSync } = require('child_process'); // 💡 修正点: execSync から execFileSync に変更
+const { execFileSync } = require('child_process');
 const fs = require('fs');
 const { Client } = require('@notionhq/client');
 
 const notion = new Client({ auth: process.env.NOTION_TOKEN });
-
-// 💡 前提資料「AI04_業務経歴書」のページID
 const PREMISE_PAGE_ID = '38f4c3b4a172807b8bccc4e52d041661';
 
-// ブロックからテキストを再帰的に抽出する関数（下位ノートも読み込む）
+// ブロックからテキストを再帰的に抽出する関数
 async function extractTextFromBlocks(blockId, depth = 0) {
-  // API制限や処理の肥大化を防ぐため、深さ2階層まででストップ
   if (depth > 2) return "";
-
   let textContent = "";
   try {
     const blocks = await notion.blocks.children.list({ block_id: blockId });
@@ -36,7 +32,6 @@ async function extractTextFromBlocks(blockId, depth = 0) {
 
 async function main() {
   try {
-    // 1. タスク情報(PAGE_ID)の読み込み
     if (!fs.existsSync('./task_info.json')) {
       console.log('タスク情報が見つかりません。実行をスキップします。');
       return;
@@ -44,7 +39,6 @@ async function main() {
     const taskInfo = JSON.parse(fs.readFileSync('./task_info.json', 'utf8'));
     const pageId = taskInfo.PAGE_ID;
 
-    // 2. Notionから「かんばんタスク」のページ情報を取得
     const page = await notion.pages.retrieve({ page_id: pageId });
     
     let targetNote = "指定なし";
@@ -53,11 +47,9 @@ async function main() {
     }
     console.log(`📝 更新対象ノート: ${targetNote}`);
 
-    // 3. 前提資料（AI04_業務経歴書）と下位ノートの読み込み
     console.log('📚 前提資料と下位ノートの開発環境情報を読み取っています...');
     const premiseText = await extractTextFromBlocks(PREMISE_PAGE_ID);
 
-    // 4. 「更新対象ノート」のタイトルでNotionを検索し、仕様書本文を取得する
     let targetNoteBody = "（仕様書の取得に失敗したか、本文が空です）";
     if (targetNote !== "指定なし") {
       console.log(`🔍 更新対象ノート「${targetNote}」を検索しています...`);
@@ -80,7 +72,6 @@ async function main() {
       }
     }
 
-    // 5. Claude Codeへのプロンプト作成
     const prompt = `あなたは優秀なAIエンジニアです。以下の「前提資料（開発環境・技術スタック等）」と「今回の実装仕様」に従って、対象のソースコードを生成・更新し、ファイルに書き込んでください。
 
 【対象画面/機能】
@@ -96,7 +87,6 @@ ${targetNoteBody || '（仕様の記載なし）'}
 
     console.log('🤖 Claude Codeを実行中...');
     
-    // 💡 修正ポイント: シェル( /bin/sh )の構文解釈を完全にバイパスして安全にコマンドを実行する
     const result = execFileSync('claude', ['-p', prompt], { 
       encoding: 'utf-8',
       stdio: 'pipe'
@@ -104,14 +94,32 @@ ${targetNoteBody || '（仕様の記載なし）'}
 
     console.log('✅ Claude Codeの実行が完了しました。');
 
-    // 6. Notion（かんばん）へのフィードバック
+    // 💡 修正ポイント: 堅牢なフィードバック送信処理（エラーが起きても処理を止めない）
     if (result.includes('修正点:') || result.includes('修正点：')) {
       console.log('💡 修正点が検出されたため、Notionにフィードバックを追記します。');
-      await notion.comments.create({
-        parent: { page_id: pageId },
-        rich_text: [{ text: { content: "【AIからの修正点・フィードバック】\n" + result.substring(0, 1800) } }]
-      });
-      console.log('Notionへのフィードバック完了。');
+      
+      try {
+        const commentResponse = await fetch('https://api.notion.com/v1/comments', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${process.env.NOTION_TOKEN}`,
+            'Notion-Version': '2022-06-28',
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            parent: { page_id: pageId },
+            rich_text: [{ text: { content: "【AIからの修正点・フィードバック】\n" + result.substring(0, 1800) } }]
+          })
+        });
+
+        if (!commentResponse.ok) {
+          throw new Error(`HTTP ${commentResponse.status} - ${await commentResponse.text()}`);
+        }
+        console.log('✅ Notionへのフィードバック完了。');
+      } catch (commentErr) {
+        // エラーをコンソールに出すだけで、異常終了（exit code 1）はさせない
+        console.error('⚠️ コメントの送信に失敗しましたが、コード生成は完了しているため後続のPush処理へ進みます:', commentErr.message);
+      }
     }
 
   } catch (error) {
@@ -119,7 +127,7 @@ ${targetNoteBody || '（仕様の記載なし）'}
     if (error.stdout) {
       console.error('【Claude出力ログ】\n', error.stdout.toString());
     }
-    process.exit(1);
+    process.exit(1); // ここは致命的なエラーなので終了させる
   }
 }
 
