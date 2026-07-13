@@ -1,6 +1,7 @@
 // scripts/claude-coder.js
 const { execFileSync } = require('child_process');
 const fs = require('fs');
+const path = require('path'); // 💡 修正ポイント: パス操作用にインポート追加
 const { Client } = require('@notionhq/client');
 
 const notion = new Client({ auth: process.env.NOTION_TOKEN });
@@ -72,22 +73,29 @@ async function main() {
       }
     }
 
-    // 💡 修正ポイント: プロンプトを強化し、絶対にファイルを作成させる
-    const prompt = `あなたは優秀なAIエンジニアです。以下の「前提資料（開発環境・技術スタック等）」と「今回の実装仕様」に従って、対象のソースコードを生成してください。
+    // 💡 修正ポイント: AIに「ツールを使わずテキストで出力する」ことを厳命する
+    const prompt = `あなたは優秀なAIエンジニアです。以下の「前提資料」と「今回の実装仕様」に従って、対象のソースコードを生成してください。
 
-【厳守事項】
-標準出力（コンソール）にコードのテキストを出力するだけでなく、必ず適切なディレクトリ構造を作成し、ローカルディスク上にファイルとして保存（書き込み）してください。
+【🚨 厳守事項：出力フォーマットについて】
+あなたは現在CI環境で動作しているため、ファイル書き込み（Write/Edit）やBashツールが権限エラーでブロックされます。ツールは絶対に使用しないでください。
+代わりに、作成・更新すべきファイルの内容を、必ず以下の「独自のテキストフォーマット」で標準出力（コンソール）に出力してください。後続のシステムがこれを読み取ってファイルを作成します。
+
+[FILE_START: 作成するファイルの相対パス (例: src/index.js)]
+(ここにファイルの中身を記述)
+[FILE_END]
+
+※複数のファイルがある場合は、必要な数だけ上記ブロックを繰り返してください。
 
 【対象画面/機能】
 ${targetNote}
 
 【前提資料（技術スタック・全体仕様）】
-${premiseText || '（前提資料の取得に失敗、または空です）'}
+${premiseText || '（前提資料なし）'}
 
 【今回の実装仕様（対象ノートの本文）】
 ${targetNoteBody || '（仕様の記載なし）'}
 
-※ノートに反映させるべき修正点や、情報不足で作成できない場合は、「修正点:」というキーワードを含めて出力してください。`;
+※ノートに反映させるべき修正点や情報不足がある場合は、「修正点:」というキーワードを含めて出力してください。`;
 
     console.log('🤖 Claude Codeを実行中...');
     
@@ -96,11 +104,34 @@ ${targetNoteBody || '（仕様の記載なし）'}
       stdio: 'pipe'
     });
 
-    // 💡 修正ポイント: AIが何を言ったのか、必ずログに出力して見れるようにする
     console.log('✅ Claude Codeの実行が完了しました。以下のAIの出力結果を確認します:\n');
     console.log('--------------------------------------------------');
     console.log(result);
     console.log('--------------------------------------------------\n');
+
+    // 💡 修正ポイント: AIの出力からファイル内容を抽出し、Node.js側でファイルを作成する
+    const fileRegex = /\[FILE_START:\s*(.+?)\]([\s\S]*?)\[FILE_END\]/g;
+    let match;
+    let fileCreated = false;
+
+    while ((match = fileRegex.exec(result)) !== null) {
+      const filePath = match[1].trim();
+      const fileContent = match[2].trim() + '\n';
+      
+      // ディレクトリが存在しない場合は自動で作成
+      const dirPath = path.dirname(filePath);
+      if (!fs.existsSync(dirPath)) {
+        fs.mkdirSync(dirPath, { recursive: true });
+      }
+      
+      fs.writeFileSync(filePath, fileContent);
+      console.log(`📁 ファイルを解析し、ディスクに保存しました: ${filePath}`);
+      fileCreated = true;
+    }
+
+    if (!fileCreated) {
+      console.log('⚠️ [FILE_START] ~ [FILE_END] のフォーマットが検出されませんでした。コードは生成されていません。');
+    }
 
     if (result.includes('修正点:') || result.includes('修正点：')) {
       console.log('💡 修正点が検出されたため、Notionにフィードバックを追記します。');
