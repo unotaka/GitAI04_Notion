@@ -72,7 +72,11 @@ async function main() {
       }
     }
 
-    const prompt = `あなたは優秀なAIエンジニアです。以下の「前提資料（開発環境・技術スタック等）」と「今回の実装仕様」に従って、対象のソースコードを生成・更新し、ファイルに書き込んでください。
+    // 💡 修正ポイント: プロンプトを強化し、絶対にファイルを作成させる
+    const prompt = `あなたは優秀なAIエンジニアです。以下の「前提資料（開発環境・技術スタック等）」と「今回の実装仕様」に従って、対象のソースコードを生成してください。
+
+【厳守事項】
+標準出力（コンソール）にコードのテキストを出力するだけでなく、必ず適切なディレクトリ構造を作成し、ローカルディスク上にファイルとして保存（書き込み）してください。
 
 【対象画面/機能】
 ${targetNote}
@@ -83,7 +87,7 @@ ${premiseText || '（前提資料の取得に失敗、または空です）'}
 【今回の実装仕様（対象ノートの本文）】
 ${targetNoteBody || '（仕様の記載なし）'}
 
-※ノートに反映させるべき修正点や、実行環境の問題がある場合は、「修正点:」というキーワードを含めて出力してください。`;
+※ノートに反映させるべき修正点や、情報不足で作成できない場合は、「修正点:」というキーワードを含めて出力してください。`;
 
     console.log('🤖 Claude Codeを実行中...');
     
@@ -92,12 +96,14 @@ ${targetNoteBody || '（仕様の記載なし）'}
       stdio: 'pipe'
     });
 
-    console.log('✅ Claude Codeの実行が完了しました。');
+    // 💡 修正ポイント: AIが何を言ったのか、必ずログに出力して見れるようにする
+    console.log('✅ Claude Codeの実行が完了しました。以下のAIの出力結果を確認します:\n');
+    console.log('--------------------------------------------------');
+    console.log(result);
+    console.log('--------------------------------------------------\n');
 
-    // 💡 修正ポイント: 堅牢なフィードバック送信処理（エラーが起きても処理を止めない）
     if (result.includes('修正点:') || result.includes('修正点：')) {
       console.log('💡 修正点が検出されたため、Notionにフィードバックを追記します。');
-      
       try {
         const commentResponse = await fetch('https://api.notion.com/v1/comments', {
           method: 'POST',
@@ -117,8 +123,7 @@ ${targetNoteBody || '（仕様の記載なし）'}
         }
         console.log('✅ Notionへのフィードバック完了。');
       } catch (commentErr) {
-        // エラーをコンソールに出すだけで、異常終了（exit code 1）はさせない
-        console.error('⚠️ コメントの送信に失敗しましたが、コード生成は完了しているため後続のPush処理へ進みます:', commentErr.message);
+        console.error('⚠️ コメントの送信に失敗しました:', commentErr.message);
       }
     }
 
@@ -127,7 +132,7 @@ ${targetNoteBody || '（仕様の記載なし）'}
     if (error.stdout) {
       console.error('【Claude出力ログ】\n', error.stdout.toString());
     }
-    process.exit(1); // ここは致命的なエラーなので終了させる
+    process.exit(1);
   }
 }
 
