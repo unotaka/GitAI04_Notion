@@ -1,5 +1,5 @@
 // scripts/claude-coder.js
-const { execSync } = require('child_process');
+const { execFileSync } = require('child_process'); // 💡 修正点: execSync から execFileSync に変更
 const fs = require('fs');
 const { Client } = require('@notionhq/client');
 
@@ -57,7 +57,7 @@ async function main() {
     console.log('📚 前提資料と下位ノートの開発環境情報を読み取っています...');
     const premiseText = await extractTextFromBlocks(PREMISE_PAGE_ID);
 
-    // 💡 4. 「更新対象ノート」のタイトルでNotionを検索し、仕様書本文を取得する
+    // 4. 「更新対象ノート」のタイトルでNotionを検索し、仕様書本文を取得する
     let targetNoteBody = "（仕様書の取得に失敗したか、本文が空です）";
     if (targetNote !== "指定なし") {
       console.log(`🔍 更新対象ノート「${targetNote}」を検索しています...`);
@@ -80,7 +80,7 @@ async function main() {
       }
     }
 
-    // 5. Claude Codeへのプロンプト作成と実行
+    // 5. Claude Codeへのプロンプト作成
     const prompt = `あなたは優秀なAIエンジニアです。以下の「前提資料（開発環境・技術スタック等）」と「今回の実装仕様」に従って、対象のソースコードを生成・更新し、ファイルに書き込んでください。
 
 【対象画面/機能】
@@ -96,7 +96,8 @@ ${targetNoteBody || '（仕様の記載なし）'}
 
     console.log('🤖 Claude Codeを実行中...');
     
-    const result = execSync(`claude -p "${prompt}"`, { 
+    // 💡 修正ポイント: シェル( /bin/sh )の構文解釈を完全にバイパスして安全にコマンドを実行する
+    const result = execFileSync('claude', ['-p', prompt], { 
       encoding: 'utf-8',
       stdio: 'pipe'
     });
