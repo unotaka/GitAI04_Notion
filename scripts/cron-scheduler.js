@@ -10,7 +10,7 @@ async function main() {
   try {
     console.log('Notionデータベースを確認しています... (Native Fetch版)');
     
-    // 💡 安全装置: DATABASE_ID の中身をチェック
+    // 安全装置: DATABASE_ID の中身をチェック
     if (!DATABASE_ID) {
       throw new Error('NOTION_DATABASE_ID が空です。GitHub Secretsの設定を確認してください。');
     }
@@ -52,13 +52,21 @@ async function main() {
     const page = data.results[0];
     const pageId = page.id;
     
-    // タスクIDを取得
+    // 💡 タスクIDを取得（IDプロパティに対応するよう改修）
     let taskId = 'task-unknown';
-    if (page.properties['タスクID']) {
-      if (page.properties['タスクID'].title && page.properties['タスクID'].title.length > 0) {
-        taskId = page.properties['タスクID'].title[0].plain_text;
-      } else if (page.properties['タスクID'].rich_text && page.properties['タスクID'].rich_text.length > 0) {
-        taskId = page.properties['タスクID'].rich_text[0].plain_text;
+    const taskIdProp = page.properties['タスクID'];
+    
+    if (taskIdProp) {
+      if (taskIdProp.type === 'unique_id' && taskIdProp.unique_id) {
+        // Notionの「IDプロパティ(№)」の場合、プレフィックスと番号を結合する
+        const prefix = taskIdProp.unique_id.prefix ? `${taskIdProp.unique_id.prefix}-` : '';
+        taskId = `${prefix}${taskIdProp.unique_id.number}`;
+      } else if (taskIdProp.title && taskIdProp.title.length > 0) {
+        // タイトルプロパティの場合
+        taskId = taskIdProp.title[0].plain_text;
+      } else if (taskIdProp.rich_text && taskIdProp.rich_text.length > 0) {
+        // テキストプロパティの場合
+        taskId = taskIdProp.rich_text[0].plain_text;
       }
     }
 
