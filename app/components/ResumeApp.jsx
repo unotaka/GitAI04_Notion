@@ -38,9 +38,16 @@ export default function ResumeApp() {
     const file = e.target.files?.[0];
     if (!file) return;
     try {
-      const { basicInfo: importedBasicInfo, careerList: importedCareerList } = await importExcelFile(file);
+      const {
+        basicInfo: importedBasicInfo,
+        techSummary: importedTechSummary,
+        skillCategories: importedSkillCategories,
+        careerList: importedCareerList,
+      } = await importExcelFile(file);
       setBasicInfo((prev) => ({ ...prev, ...importedBasicInfo }));
-      if (importedCareerList.length > 0) setCareerList(importedCareerList);
+      setTechSummary((prev) => ({ ...prev, ...importedTechSummary }));
+      if (importedSkillCategories && importedSkillCategories.length > 0) setSkillCategories(importedSkillCategories);
+      if (importedCareerList && importedCareerList.length > 0) setCareerList(importedCareerList);
     } catch (err) {
       alert(`Excelファイルの読み込みに失敗しました: ${err.message}`);
     } finally {
